@@ -7,9 +7,11 @@ from src.auth.database import Base
 
 
 class Url(Base):
-    __tablename__ = "url"
+    __tablename__ = 'url'
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     original_url: Mapped[str] = mapped_column(String, nullable=False)
     short_url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     created_date: Mapped[str] = mapped_column(

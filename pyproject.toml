@@ -1,23 +1,21 @@
 [tool.ruff]
-line-length = 88
-target-version = "py312"
-fix = true
-src = ["src"]
+line-length = 79
+exclude = ["alembic"]
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle
-    "F",   # pyflakes
-    "I",   # import sorting
-    "B",   # bugbear
-    "UP",  # pyupgrade
-    "SIM", # simplifications
-    "C4",  # comprehensions
-]
+preview = true
+select = ['I', 'F', 'E', 'W', 'PL', 'PT']
 
+[tool.ruff.format]
+preview = true
+quote-style = 'single'
 
 [tool.taskipy.tasks]
-api = "uvicorn src.app:app --reload"
+api = "uvicorn src.auth.router:app --reload"
 test = "pytest -v"
 lint = "ruff check ."
 format = "ruff format ."
+
+
+
+
