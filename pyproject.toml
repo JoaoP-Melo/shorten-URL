@@ -1,0 +1,23 @@
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+fix = true
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # import sorting
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplifications
+    "C4",  # comprehensions
+]
+
+
+[tool.taskipy.tasks]
+api = "uvicorn src.app:app --reload"
+test = "pytest -v"
+lint = "ruff check ."
+format = "ruff format ."
