@@ -1,3 +1,7 @@
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = "-p no:warnings"
+
 [tool.ruff]
 line-length = 79
 exclude = ["alembic"]
