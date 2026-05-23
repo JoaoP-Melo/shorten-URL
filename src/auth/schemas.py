@@ -21,8 +21,8 @@ class StatisticUrl(BaseModel):
 
 
 class ShortUrlRequest(BaseModel):
-    original_url : str
+    original_url: str
 
 
 class OriginalUrlRequest(BaseModel):
-    short_url : str
+    short_url: str

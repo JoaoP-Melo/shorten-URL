@@ -41,15 +41,14 @@ def client(session):
 @pytest.fixture
 def add_url_in_db(session):
     new_url = Url(
-        original_url= "www.test.com",
-        short_url= "testtest",
-        expires_date= (
-            datetime.now() + timedelta(
-                minutes=int(os.getenv('URL_TIME_EXPIRE'))
-            )
+        original_url='www.test.com',
+        short_url='testtest',
+        expires_date=(
+            datetime.now()
+            + timedelta(minutes=int(os.getenv('URL_TIME_EXPIRE')))
         ),
         click_count=0,
-        is_active=True
+        is_active=True,
     )
 
     session.add(new_url)
