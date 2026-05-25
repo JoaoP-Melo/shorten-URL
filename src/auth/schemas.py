@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 
@@ -26,3 +26,14 @@ class ShortUrlRequest(BaseModel):
 
 class OriginalUrlRequest(BaseModel):
     short_url: str
+
+
+class PrivateUser(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+
+
+class PublicUser(BaseModel):
+    email: EmailStr
+    username: str
