@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from http import HTTPStatus
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -9,15 +10,29 @@ import os
 from src.auth.database import get_db
 from src.auth.models import Url, User
 from src.auth.service import generator_code_url
-from src.auth.schemas import StatisticUrl, ShortUrlRequest, OriginalUrlRequest, PrivateUser, PublicUser
-from src.auth.security import get_password_hash, verify_password
+from src.auth.schemas import (
+    ShortUrlRequest,
+    PrivateUser,
+    PublicUser,
+)
+from src.auth.security import (
+    get_password_hash,
+    verify_password,
+    create_token,
+    get_current_user,
+)
 
 load_dotenv()
+URL_TIME_EXPIRE = int(os.getenv('URL_TIME_EXPIRE'))
 app = FastAPI()
 
 
-@app.post("/save_url/", status_code=HTTPStatus.CREATED)
-def shoteen_url(data: ShortUrlRequest, session: Session = Depends(get_db)):
+@app.post('/save_url/', status_code=HTTPStatus.CREATED)
+def shoteen_url(
+    data: ShortUrlRequest,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
 
     short_url = generator_code_url()
 
@@ -26,9 +41,7 @@ def shoteen_url(data: ShortUrlRequest, session: Session = Depends(get_db)):
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         )
 
-    time_expire = datetime.now() + timedelta(
-        minutes=int(os.getenv('URL_TIME_EXPIRE'))
-    )
+    time_expire = datetime.now() + timedelta(minutes=int(URL_TIME_EXPIRE))
 
     new_url = Url(
         original_url=data.original_url,
@@ -36,6 +49,7 @@ def shoteen_url(data: ShortUrlRequest, session: Session = Depends(get_db)):
         expires_date=time_expire,
         click_count=0,
         is_active=True,
+        user_id=current_user.id,
     )
 
     session.add(new_url)
@@ -45,8 +59,12 @@ def shoteen_url(data: ShortUrlRequest, session: Session = Depends(get_db)):
     return {'short_url': short_url}
 
 
-@app.get("/get_url/{short_url}", status_code=HTTPStatus.OK)
-def get_short_url(short_url: str, session: Session = Depends(get_db)):
+@app.get('/get_url/{current_user.id}', status_code=HTTPStatus.OK)
+def get_short_url(
+    short_url: str,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
 
     url_in_db = session.scalar(select(Url).where(Url.short_url == short_url))
 
@@ -67,6 +85,12 @@ def get_short_url(short_url: str, session: Session = Depends(get_db)):
             status_code=HTTPStatus.NOT_FOUND, detail='Short url is deactivated'
         )
 
+    if url_in_db.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='This URL belongs to another user.',
+        )
+
     session.execute(
         update(Url)
         .where(Url.short_url == short_url)
@@ -76,14 +100,24 @@ def get_short_url(short_url: str, session: Session = Depends(get_db)):
     return {'original_url': url_in_db.original_url}
 
 
-@app.get("/statistic_url/{short_url}", status_code=HTTPStatus.OK)
-def statistic_url(short_url: str, session: Session = Depends(get_db)):
+@app.get('/statistic_url/{short_url}', status_code=HTTPStatus.OK)
+def statistic_url(
+    short_url: str,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
 
     url_in_db = session.scalar(select(Url).where(Url.short_url == short_url))
 
     if url_in_db is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Short url not found'
+        )
+
+    if url_in_db.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='This URL belongs to another user.',
         )
 
     return {
@@ -92,8 +126,12 @@ def statistic_url(short_url: str, session: Session = Depends(get_db)):
     }
 
 
-@app.delete("/delete_url/{short_url}", status_code=HTTPStatus.OK)
-def delete_url(short_url: str, session: Session = Depends(get_db)):
+@app.delete('/delete_url/{current_user.id}', status_code=HTTPStatus.OK)
+def delete_url(
+    short_url: str,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
 
     url_in_db = session.scalar(select(Url).where(Url.short_url == short_url))
 
@@ -102,13 +140,21 @@ def delete_url(short_url: str, session: Session = Depends(get_db)):
             status_code=HTTPStatus.NOT_FOUND, detail='Short url not found'
         )
 
+    if url_in_db.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='This URL belongs to another user.',
+        )
+
     session.delete(url_in_db)
     session.commit()
 
     return {'short_url': url_in_db.short_url}
 
 
-@app.post("/create_user/", status_code=HTTPStatus.CREATED, response_model=PublicUser)
+@app.post(
+    '/create_user/', status_code=HTTPStatus.CREATED, response_model=PublicUser
+)
 def create_user(user: PrivateUser, session: Session = Depends(get_db)):
     existing_user = session.scalar(
         select(User).where(
@@ -120,33 +166,31 @@ def create_user(user: PrivateUser, session: Session = Depends(get_db)):
         if existing_user.username == user.username:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
-                detail="Username already exists",
+                detail='Username already exists',
             )
         elif existing_user.email == user.email:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
-                detail="Email already exists",
+                detail='Email already exists',
             )
-        
 
     hashed_password = get_password_hash(user.password)
     new_user = User(
-        email= user.email,
-        username= user.username,
-        password= hashed_password,
+        email=user.email,
+        username=user.username,
+        password=hashed_password,
     )
 
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
 
-    return {
-            "email": user.email,
-            "username": user.username
-            }
+    return {'email': user.email, 'username': user.username}
 
 
-@app.delete("/delete_user", status_code=HTTPStatus.OK, response_model=PublicUser)
+@app.delete(
+    '/delete_user', status_code=HTTPStatus.OK, response_model=PublicUser
+)
 def delete_user(user: PrivateUser, session: Session = Depends(get_db)):
     existing_user = session.scalar(
         select(User).where(
@@ -157,13 +201,34 @@ def delete_user(user: PrivateUser, session: Session = Depends(get_db)):
     if existing_user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail="User not found",
-            )
-    
+            detail='User not found',
+        )
+
     session.delete(existing_user)
     session.commit()
 
-    return {
-            "email": user.email,
-            "username": user.username
-            }
+    return {'email': user.email, 'username': user.username}
+
+
+@app.post('/token')
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_db),
+):
+    user = session.scalar(select(User).where(User.email == form_data.username))
+
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Incorrect email or password',
+        )
+
+    if not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Incorrect email or password',
+        )
+
+    access_token = create_token(data={'sub': user.email})
+
+    return {'access_token': access_token, 'token_type': 'bearer'}

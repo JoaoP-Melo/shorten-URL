@@ -20,7 +20,9 @@ class Url(Base):
     expires_date: Mapped[str] = mapped_column(DateTime, nullable=False)
     click_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('user.id'), nullable=False
+    )
 
 
 class User(Base):
