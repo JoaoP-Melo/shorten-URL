@@ -35,5 +35,6 @@ class PrivateUser(BaseModel):
 
 
 class PublicUser(BaseModel):
+    id: int
     email: EmailStr
     username: str

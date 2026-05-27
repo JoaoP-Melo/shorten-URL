@@ -16,7 +16,7 @@ quote-style = 'single'
 
 [tool.taskipy.tasks]
 api = "uvicorn src.auth.router:app --reload"
-test = "pytest -v"
+test = "pytest -vv"
 lint = "ruff check ."
 format = "ruff format ."
 

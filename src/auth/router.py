@@ -36,10 +36,11 @@ def shoteen_url(
 
     short_url = generator_code_url()
 
-    if session.scalar(select(Url).where(Url.short_url == short_url)):
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-        )
+    while session.scalar(
+        select(Url).where(Url.short_url == short_url)
+    ):
+        
+        short_url = generator_code_url()
 
     time_expire = datetime.now() + timedelta(minutes=int(URL_TIME_EXPIRE))
 
@@ -59,8 +60,8 @@ def shoteen_url(
     return {'short_url': short_url}
 
 
-@app.get('/get_url/{current_user.id}', status_code=HTTPStatus.OK)
-def get_short_url(
+@app.get('/get_url/{short_url}', status_code=HTTPStatus.OK)
+def get_original_url(
     short_url: str,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -81,8 +82,9 @@ def get_short_url(
         )
         session.commit()
 
+    if url_in_db.is_active == False:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Short url is deactivated'
+            status_code=HTTPStatus.FORBIDDEN, detail='Short url is deactivated'
         )
 
     if url_in_db.user_id != current_user.id:
@@ -126,7 +128,7 @@ def statistic_url(
     }
 
 
-@app.delete('/delete_url/{current_user.id}', status_code=HTTPStatus.OK)
+@app.delete('/delete_url/{short_url}', status_code=HTTPStatus.OK)
 def delete_url(
     short_url: str,
     session: Session = Depends(get_db),
@@ -185,16 +187,20 @@ def create_user(user: PrivateUser, session: Session = Depends(get_db)):
     session.commit()
     session.refresh(new_user)
 
-    return {'email': user.email, 'username': user.username}
+    return {
+        'username': new_user.username, 
+        'email': new_user.email, 
+        'id': new_user.id
+        }
 
 
 @app.delete(
-    '/delete_user', status_code=HTTPStatus.OK, response_model=PublicUser
+    '/delete_user/{username}', status_code=HTTPStatus.OK
 )
-def delete_user(user: PrivateUser, session: Session = Depends(get_db)):
+def delete_user(username: str, session: Session = Depends(get_db)):
     existing_user = session.scalar(
         select(User).where(
-            (User.username == user.username) | (User.email == user.email)
+            (User.username == username)
         )
     )
 
@@ -207,7 +213,7 @@ def delete_user(user: PrivateUser, session: Session = Depends(get_db)):
     session.delete(existing_user)
     session.commit()
 
-    return {'email': user.email, 'username': user.username}
+    return {'email': existing_user.email, 'username': existing_user.username}
 
 
 @app.post('/token')

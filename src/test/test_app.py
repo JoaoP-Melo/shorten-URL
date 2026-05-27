@@ -1,6 +1,8 @@
 from http import HTTPStatus
 from sqlalchemy import select
-from src.auth.models import Url
+from src.auth.models import Url, User
+from src.auth.security import get_current_user
+from src.auth.router import app
 
 
 def test_shoteen_url_success(client, session):
@@ -13,8 +15,7 @@ def test_shoteen_url_success(client, session):
     assert response.status_code == HTTPStatus.CREATED
     assert response.json() == {'short_url': url_in_db.short_url}
 
-
-def test_get_short_url_success(client, session, add_url_in_db):
+def test_get_original_url_success(client, session, test_url):
     url_db = session.scalar(select(Url))
     short_url_db = str(url_db.short_url)
 
@@ -24,7 +25,51 @@ def test_get_short_url_success(client, session, add_url_in_db):
     assert response.json() == {'original_url': url_db.original_url}
 
 
-def test_statistic_url_success(client, session, add_url_in_db):
+def test_get_original_url_short_url_not_found(client):
+    short_url_db = 'ksnafjibsf'
+
+    response = client.get(f'/get_url/{short_url_db}')
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_get_original_url_short_url_deactivated(client, session, test_url):
+    url_db = session.scalar(select(Url))
+    url_db.is_active = False
+    session.commit()
+
+    url_db = session.scalar(select(Url))
+    short_url_db = str(url_db.short_url)
+
+    response = client.get(f'/get_url/{short_url_db}')
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_get_original_url_short_url_user_unauthorized(client, session, test_url):
+    def get_another_user():
+        user = User(
+            username='testtest',
+            email='testtest@test.com',
+            password='testtest'
+        )
+
+        session.add(user)
+        session.commit()
+
+        return user
+
+    app.dependency_overrides[get_current_user] = get_another_user
+
+    url_db = session.scalar(select(Url))
+    short_url_db = str(url_db.short_url)
+
+    response = client.get(f'/get_url/{short_url_db}')
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_statistic_url_success(client, session, test_url):
     url_db = session.scalar(select(Url))
     short_url_db = str(url_db.short_url)
 
@@ -37,7 +82,38 @@ def test_statistic_url_success(client, session, add_url_in_db):
     }
 
 
-def test_delete_url_success(client, session, add_url_in_db):
+def test_statistic_url_success_shorturl_not_found(client, session, test_url):
+    short_url = 'ksnafjibsf'
+
+    response = client.get(f'/statistic_url/{short_url}')
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_statistic_url_short_url_user_unauthorized(client, session, test_url):
+    def get_another_user():
+        user = User(
+            username='testtest',
+            email='testtest@test.com',
+            password='testtest'
+        )
+
+        session.add(user)
+        session.commit()
+
+        return user
+
+    app.dependency_overrides[get_current_user] = get_another_user
+
+    url_db = session.scalar(select(Url))
+    short_url_db = str(url_db.short_url)
+
+    response = client.get(f'/statistic_url/{short_url_db}')
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_delete_url_success(client, session, test_url):
     url_db = session.scalar(select(Url))
     short_url_db = str(url_db.short_url)
 
@@ -45,3 +121,97 @@ def test_delete_url_success(client, session, add_url_in_db):
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'short_url': short_url_db}
+
+
+def test_delete_url_success_shorturl_not_found(client, session, test_url):
+    short_url = 'ksnafjibsf'
+
+    response = client.delete(f'/delete_url/{short_url}')
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_delete_url_short_url_user_unauthorized(client, session, test_url):
+    def get_another_user():
+        user = User(
+            username='testtest',
+            email='testtest@test.com',
+            password='testtest'
+        )
+
+        session.add(user)
+        session.commit()
+
+        return user
+
+
+    app.dependency_overrides[get_current_user] = get_another_user
+
+    url_db = session.scalar(select(Url))
+    short_url = str(url_db.short_url)
+
+    response = client.delete(f'/delete_url/{short_url}')
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_create_user_success(client, session):
+    response = client.post( "/create_user/", 
+        json={
+        'username': 'testtest',
+        'email': 'testtest@test.com',
+        'password': 'testtest'
+        }
+    )
+
+    user_db = session.scalar(select(User).where(
+        (User.email == 'testtest@test.com')
+        )
+    )
+       
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json() == {
+        'username': user_db.username,
+        'email': user_db.email,
+        'id': user_db.id
+    }
+
+
+def test_create_user_username_conflict(client, session, test_user):
+    response = client.post( "/create_user/", 
+        json={
+        'username': test_user.username,
+        'email': 'testtest@test.com',
+        'password': 'testtest'
+        }
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+
+
+def test_create_user_email_conflict(client, session, test_user):
+    response = client.post( "/create_user/", 
+        json={
+        'username': 'testtest',
+        'email': test_user.email,
+        'password': 'testtest'
+        }
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+
+
+def test_delete_success(client, session, test_user):
+    response = client.delete(f'/delete_user/{test_user.username}')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {
+        'email': test_user.email,
+        'username': test_user.username
+    }
+
+def test_delete_success(client, session):
+    response = client.delete(f'/delete_user/{'testtest'}')
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
