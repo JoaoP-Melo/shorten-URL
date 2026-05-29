@@ -1,9 +1,12 @@
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy import delete
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 from dotenv import load_dotenv
 import os
 import pytest
+import pytest_asyncio
 from datetime import datetime, timedelta
 
 from src.auth.router import app
@@ -13,57 +16,44 @@ from src.auth.security import get_current_user, get_password_hash
 
 load_dotenv()
 
-engine = create_engine(os.getenv('TEST_DATABASE_URL'))
+TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
+engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+SessionTest = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
-SessionTest = sessionmaker(bind=engine)
+transport = ASGITransport(app=app)
 
 
-@pytest.fixture
-def session():
-    with SessionTest() as session:
+@pytest_asyncio.fixture
+async def session():
+    async with SessionTest() as session:
         yield session
-        session.query(Url).delete()
-        session.query(User).delete()
-        session.commit()
+        await session.execute(delete(Url))
+        await session.execute(delete(User))
+        await session.commit()
 
 
-@pytest.fixture
-def client(session, test_user):
-    def get_db_override():
-        yield session
-
-    
-    def get_test_user_id():
-        return test_user
-    
-
-    app.dependency_overrides[get_db] = get_db_override
-    app.dependency_overrides[get_current_user] = get_test_user_id
-
-    with TestClient(app) as client:
-        yield client
-
-    app.dependency_overrides.clear()
-
-@pytest.fixture
-def test_user(session):
+@pytest_asyncio.fixture
+async def test_user(session):
     password = get_password_hash('testtest')
 
-    user = User(
+    new_user = User(
         username='test',
         email='test@test.com',
         password=password
     )
 
-    session.add(user)
-    session.commit()
+    session.add(new_user)
+    await session.commit() 
+    await session.refresh(new_user)
 
-    return user
+    return new_user
 
-
-@pytest.fixture
-def test_url(session, test_user):
-
+@pytest_asyncio.fixture
+async def test_url(test_user, session):  # ← também usa session
     new_url = Url(
         original_url='www.test.com',
         short_url='testtest',
@@ -74,9 +64,27 @@ def test_url(session, test_user):
         click_count=0,
         is_active=True,
         user_id=test_user.id,
-    )
-
+    ) 
     session.add(new_url)
-    session.commit()
-    
+    await session.commit()
+    await session.refresh(new_url)
+
     return new_url
+
+
+@pytest_asyncio.fixture
+async def client(test_user):
+    async def get_db_override():
+        async with SessionTest() as session:
+            yield session
+
+    async def get_test_user():
+        return test_user
+
+    app.dependency_overrides[get_db] = get_db_override
+    app.dependency_overrides[get_current_user] = get_test_user
+
+    async with AsyncClient(transport=transport, base_url='http://test') as c:
+        yield c
+
+    app.dependency_overrides.clear()

@@ -4,6 +4,7 @@ from jwt import DecodeError, decode, encode
 from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from http import HTTPStatus
@@ -41,8 +42,8 @@ def create_token(data: dict):
     return encoded_jwt
 
 
-def get_current_user(
-    session: Session = Depends(get_db),
+async def get_current_user(
+    session: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
     credentials_exception = HTTPException(
@@ -61,7 +62,7 @@ def get_current_user(
     except DecodeError:
         raise credentials_exception
 
-    user = session.scalar(select(User).where(User.email == subject_email))
+    user = await session.scalar(select(User).where(User.email == subject_email))
 
     if not user:
         raise credentials_exception
