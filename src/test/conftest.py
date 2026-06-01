@@ -16,8 +16,8 @@ from src.auth.security import get_current_user, get_password_hash
 
 load_dotenv()
 
-TEST_DATABASE_URL = os.getenv('TEST_DATABASE_URL')
-engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+DATABASE_URL = os.getenv('DATABASE_URL')
+engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
 SessionTest = sessionmaker(
     bind=engine,
     class_=AsyncSession,
