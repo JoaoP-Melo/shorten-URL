@@ -4,16 +4,16 @@ addopts = "-p no:warnings"
 asyncio_mode = "auto"
 
 [tool.ruff]
-line-length = 79
-exclude = ["alembic"]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "W", "I", "UP", "B"]
+exclude = [
+    "alembic",
+]
 
-[tool.ruff.lint]
-preview = true
-select = ['I', 'F', 'E', 'W', 'PL', 'PT']
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
 
-[tool.ruff.format]
-preview = true
-quote-style = 'single'
 
 [tool.taskipy.tasks]
 api = "uvicorn src.auth.router:app --reload"

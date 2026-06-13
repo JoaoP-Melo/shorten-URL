@@ -16,13 +16,9 @@ from src.auth.security import get_current_user, get_password_hash
 
 load_dotenv()
 
-DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-SessionTest = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+SessionTest = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 transport = ASGITransport(app=app)
 
@@ -38,33 +34,29 @@ async def session():
 
 @pytest_asyncio.fixture
 async def test_user(session):
-    password = get_password_hash('testtest')
+    password = get_password_hash("testtest")
 
-    new_user = User(
-        username='test',
-        email='test@test.com',
-        password=password
-    )
+    new_user = User(username="test", email="test@test.com", password=password)
 
     session.add(new_user)
-    await session.commit() 
+    await session.commit()
     await session.refresh(new_user)
 
     return new_user
 
+
 @pytest_asyncio.fixture
-async def test_url(test_user, session):  # ← também usa session
+async def test_url(test_user, session):
     new_url = Url(
-        original_url='www.test.com',
-        short_url='testtest',
+        original_url="www.test.com",
+        short_url="testtest",
         expires_date=(
-            datetime.now()
-            + timedelta(minutes=int(os.getenv('URL_TIME_EXPIRE')))
+            datetime.now() + timedelta(minutes=int(os.getenv("URL_TIME_EXPIRE")))
         ),
         click_count=0,
         is_active=True,
         user_id=test_user.id,
-    ) 
+    )
     session.add(new_url)
     await session.commit()
     await session.refresh(new_url)
@@ -84,7 +76,7 @@ async def client(test_user):
     app.dependency_overrides[get_db] = get_db_override
     app.dependency_overrides[get_current_user] = get_test_user
 
-    async with AsyncClient(transport=transport, base_url='http://test') as c:
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
     app.dependency_overrides.clear()

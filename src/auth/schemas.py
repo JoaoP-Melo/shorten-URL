@@ -24,10 +24,6 @@ class ShortUrlRequest(BaseModel):
     original_url: str
 
 
-class OriginalUrlRequest(BaseModel):
-    short_url: str
-
-
 class PrivateUser(BaseModel):
     email: EmailStr
     username: str
